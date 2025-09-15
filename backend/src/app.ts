@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import express, { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import { PrismaClient } from '@prisma/client'
@@ -314,3 +315,21 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log(`Servidor backend escuchando en puerto ${PORT}`)
 })
+=======
+import express from 'express';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import { setRoutes } from './routes/productsRoutes';
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(bodyParser.json());
+
+setRoutes(app);
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
+>>>>>>> 9e85581c41eb0594215053e95c34b6bb5982f86f

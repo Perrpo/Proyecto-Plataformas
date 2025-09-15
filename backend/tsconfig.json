@@ -1,29 +1,15 @@
 {
   "compilerOptions": {
-<<<<<<< HEAD
     "target": "ES2022",
     "module": "CommonJS",
     "outDir": "./dist",
     "rootDir": "./src",
-=======
-    "target": "ES6",
-    "module": "commonjs",
->>>>>>> 9e85581c41eb0594215053e95c34b6bb5982f86f
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-<<<<<<< HEAD
     "types": ["node", "express"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
 }
-=======
-    "outDir": "./dist",
-    "rootDir": "./src"
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
-}
->>>>>>> 9e85581c41eb0594215053e95c34b6bb5982f86f

@@ -26,12 +26,25 @@
       <h2 class="main-title">Mapa de Puntos de Recolección</h2>
       <p class="subtitle">ONGs y consumidores cercanos para donaciones</p>
 
-      <!-- Mapa simplificado sin Google Maps -->
-      <div class="map-placeholder-container">
-        <div class="map-placeholder">
-          <div class="map-icon">🗺️</div>
-          <div class="map-text">Mapa de ubicaciones</div>
-          <div class="map-desc">Encuentra ONGs y consumidores cercanos</div>
+      <!-- Mapa interactivo -->
+      <div class="map-container">
+        <div id="map" ref="mapRef" class="google-map">
+          <div class="map-fallback">
+            <div class="map-icon">🗺️</div>
+            <div class="map-text">Mapa de Ubicaciones</div>
+            <div class="map-desc">ONGs y Consumidores en Medellín</div>
+            <div class="map-coords">
+              <div v-for="loc in locations" :key="loc.id" class="location-pin">
+                <div class="pin-icon" :class="loc.tipo === 'ONG' ? 'ong' : 'consumer'">
+                  {{ loc.tipo === 'ONG' ? '🏢' : '👤' }}
+                </div>
+                <div class="pin-info">
+                  <strong>{{ loc.nombre }}</strong>
+                  <div class="pin-address">{{ loc.direccion }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -60,20 +73,33 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, nextTick } from 'vue'
+
+// Declarar tipos de Google Maps
+declare global {
+  interface Window {
+    google: typeof google
+  }
+}
 
 const query = ref('')
 const isLoading = ref(false)
 const message = ref('')
+const mapRef = ref<HTMLDivElement>()
+let map: google.maps.Map | null = null
+let markers: google.maps.Marker[] = []
+
 interface Location {
   id: number
   nombre: string
   tipo: string
   direccion: string
   especialidades: string[]
+  lat?: number
+  lng?: number
 }
 
-// Ubicaciones - VERSIÓN SIMPLE QUE FUNCIONA
+// Ubicaciones con coordenadas para Google Maps
 const locations = ref<Location[]>([
   {
     id: 1,
@@ -81,6 +107,8 @@ const locations = ref<Location[]>([
     tipo: 'ONG',
     direccion: 'Calle 50 #25-30, Medellín',
     especialidades: ['Alimentos frescos', 'Productos no perecederos'],
+    lat: 6.2442,
+    lng: -75.5812,
   },
   {
     id: 2,
@@ -88,6 +116,8 @@ const locations = ref<Location[]>([
     tipo: 'ONG',
     direccion: 'Carrera 43 #25-15, Medellín',
     especialidades: ['Frutas', 'Verduras', 'Panadería'],
+    lat: 6.2088,
+    lng: -75.5707,
   },
   {
     id: 3,
@@ -95,6 +125,8 @@ const locations = ref<Location[]>([
     tipo: 'Consumidor',
     direccion: 'Calle 30 #45-20, Medellín',
     especialidades: ['Productos orgánicos'],
+    lat: 6.2673,
+    lng: -75.5681,
   },
   {
     id: 4,
@@ -102,6 +134,8 @@ const locations = ref<Location[]>([
     tipo: 'ONG',
     direccion: 'Calle 80 #45-20, Medellín',
     especialidades: ['Comidas preparadas', 'Alimentos básicos'],
+    lat: 6.2308,
+    lng: -75.5906,
   },
   {
     id: 5,
@@ -109,6 +143,8 @@ const locations = ref<Location[]>([
     tipo: 'Consumidor',
     direccion: 'Carrera 70 #30-15, Medellín',
     especialidades: ['Productos frescos'],
+    lat: 6.2518,
+    lng: -75.5636,
   },
 ])
 
@@ -161,8 +197,8 @@ async function addNewLocation() {
 async function refreshLocations() {
   isLoading.value = true
   try {
-    const result = await fetchLocations()
-    locations.value = result
+    // En esta versión, las ubicaciones ya están cargadas localmente
+    // En una versión real, aquí harías fetch al backend
     message.value = 'Lista actualizada.'
   } catch {
     message.value = 'Error al actualizar la lista.'
@@ -230,9 +266,125 @@ function openRouteToAddress(destinationAddress: string) {
   window.open(url, '_blank')
 }
 
+// Inicializar Google Maps
+async function initMap() {
+  if (!mapRef.value) return
+
+  // Cargar el script de Google Maps si no está cargado
+  if (!window.google) {
+    await loadGoogleMapsScript()
+  }
+
+  // Crear el mapa
+  map = new google.maps.Map(mapRef.value, {
+    center: { lat: 6.2442, lng: -75.5812 }, // Medellín
+    zoom: 12,
+    styles: [
+      {
+        featureType: 'all',
+        elementType: 'geometry.fill',
+        stylers: [{ color: '#1a1a1a' }],
+      },
+      {
+        featureType: 'all',
+        elementType: 'labels.text.fill',
+        stylers: [{ color: '#ffffff' }],
+      },
+    ],
+  })
+
+  // Agregar marcadores
+  addMarkersToMap()
+}
+
+// Función global de callback para Google Maps
+declare global {
+  function initGoogleMaps(): void
+}
+
+// Cargar el script de Google Maps
+function loadGoogleMapsScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.google) {
+      resolve()
+      return
+    }
+
+    // Crear función global de callback
+    window.initGoogleMaps = () => {
+      resolve()
+    }
+
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&libraries=places&loading=async&callback=initGoogleMaps`
+    script.async = true
+    script.defer = true
+    script.onerror = () => reject(new Error('Error loading Google Maps'))
+    document.head.appendChild(script)
+  })
+}
+
+// Agregar marcadores al mapa
+function addMarkersToMap() {
+  if (!map) return
+
+  // Limpiar marcadores existentes
+  markers.forEach((marker) => marker.setMap(null))
+  markers = []
+
+  locations.value.forEach((location) => {
+    if (location.lat && location.lng) {
+      const marker = new google.maps.Marker({
+        position: { lat: location.lat, lng: location.lng },
+        map: map,
+        title: location.nombre,
+        icon: {
+          url:
+            location.tipo === 'ONG'
+              ? 'data:image/svg+xml;charset=UTF-8,' +
+                encodeURIComponent(`
+              <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="16" cy="16" r="12" fill="#00E6FF" stroke="#fff" stroke-width="2"/>
+                <text x="16" y="20" text-anchor="middle" fill="#000" font-size="12" font-weight="bold">ONG</text>
+              </svg>
+            `)
+              : 'data:image/svg+xml;charset=UTF-8,' +
+                encodeURIComponent(`
+              <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="16" cy="16" r="12" fill="#9B5CFF" stroke="#fff" stroke-width="2"/>
+                <text x="16" y="20" text-anchor="middle" fill="#fff" font-size="10" font-weight="bold">USER</text>
+              </svg>
+            `),
+        },
+      })
+
+      // Crear info window
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="color: #000; padding: 8px;">
+            <h3 style="margin: 0 0 8px 0; color: #333;">${location.nombre}</h3>
+            <p style="margin: 0 0 4px 0; font-size: 14px;"><strong>Tipo:</strong> ${location.tipo}</p>
+            <p style="margin: 0 0 4px 0; font-size: 14px;"><strong>Dirección:</strong> ${location.direccion}</p>
+            <p style="margin: 0; font-size: 14px;"><strong>Especialidades:</strong> ${location.especialidades.join(', ')}</p>
+          </div>
+        `,
+      })
+
+      // Agregar evento click al marcador
+      marker.addListener('click', () => {
+        infoWindow.open(map, marker)
+      })
+
+      markers.push(marker)
+    }
+  })
+}
+
 // Cargar ubicaciones al montar el componente
-onMounted(() => {
-  refreshLocations()
+onMounted(async () => {
+  await refreshLocations()
+  await nextTick()
+  // initMap() - Comentado para usar versión alternativa
 })
 </script>
 
@@ -246,7 +398,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
 }
 .main-title,
 h1,
@@ -256,12 +410,15 @@ h3 {
   font-weight: 700;
 }
 .dashboard-header h1 {
-  font-size: 2rem;
-  margin-bottom: 0.2rem;
+  font-size: 1.5rem;
+  margin-bottom: 0.3rem;
+  line-height: 1.3;
+  font-weight: 600;
 }
 .dashboard-header .subtitle {
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
 }
 .user-info {
   display: flex;
@@ -340,29 +497,35 @@ h3 {
   margin-top: 1rem;
 }
 .card h2 {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.3rem;
+  line-height: 1.4;
+  color: var(--text-primary);
 }
-.map-placeholder-container {
+.map-container {
   background: var(--surface-2);
   border-radius: 12px;
-  padding: 3rem 1rem;
   margin-top: 1.2rem;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border: 1px solid var(--border);
-  min-height: 300px;
+  overflow: hidden;
+  min-height: 400px;
 }
-.map-placeholder {
-  color: var(--text-secondary);
-  font-size: 1.2rem;
+.google-map {
+  width: 100%;
+  height: 400px;
+  border-radius: 12px;
+  position: relative;
+}
+.map-fallback {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.7rem;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface-1) 100%);
 }
 .map-icon {
   font-size: 3rem;
@@ -370,7 +533,7 @@ h3 {
   margin-bottom: 1rem;
 }
 .map-text {
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   color: var(--text-primary);
   font-weight: 600;
   margin-bottom: 0.5rem;
@@ -378,6 +541,64 @@ h3 {
 .map-desc {
   font-size: 1rem;
   color: var(--text-secondary);
+  margin-bottom: 2rem;
+}
+.map-coords {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.2rem;
+  width: 100%;
+  max-width: 900px;
+}
+.location-pin {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  background: var(--surface-1);
+  padding: 1.2rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.location-pin:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+.pin-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+.pin-icon.ong {
+  background: linear-gradient(135deg, #00e6ff, #0099cc);
+  color: #000;
+}
+.pin-icon.consumer {
+  background: linear-gradient(135deg, #9b5cff, #7b2cbf);
+  color: #fff;
+}
+.pin-info {
+  flex: 1;
+  text-align: left;
+}
+.pin-info strong {
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pin-address {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 .locations {
   margin-top: 2rem;

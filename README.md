@@ -325,8 +325,6 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para
 
 ## 📞 Contacto
 
-**Desarrollador**: [Tu Nombre]
-**Email**: tu.email@ejemplo.com
 **GitHub**: [@Perrpo](https://github.com/Perrpo)
 
 ---
